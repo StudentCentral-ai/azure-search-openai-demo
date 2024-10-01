@@ -85,6 +85,13 @@ const Chat = () => {
 
     const [workflowStateNo, setWorkflowStateNo] = useState<number>(0);
 
+    const [selectedMCQAnswer, setSelectedMCQAnswer] = useState("");
+
+    const handleMCQAnswerSelected = (value: string) => {
+        setSelectedMCQAnswer(value);
+        console.log("Selected MCQ Answer:", value);
+    };
+
     const speechConfig: SpeechConfig = {
         speechUrls,
         setSpeechUrls,
@@ -401,6 +408,7 @@ const Chat = () => {
                                             showSpeechOutputAzure={showSpeechOutputAzure}
                                             showSpeechOutputBrowser={showSpeechOutputBrowser}
                                             workflowStateNo={workflowStateNo}
+                                            onMCQAnswerSelected={handleMCQAnswerSelected}
                                         />
                                     </div>
                                 </div>
@@ -448,6 +456,7 @@ const Chat = () => {
                                             showSpeechOutputAzure={showSpeechOutputAzure}
                                             showSpeechOutputBrowser={showSpeechOutputBrowser}
                                             workflowStateNo={workflowStateNo}
+                                            onMCQAnswerSelected={handleMCQAnswerSelected}
                                         />
                                     </div>
                                 </div>
@@ -504,6 +513,7 @@ const Chat = () => {
                                 disabled={isLoading}
                                 onSend={question => makeApiRequest(question)}
                                 showSpeechInput={showSpeechInput}
+                                initQuestion={selectedMCQAnswer ? "My answer is: " + selectedMCQAnswer : ""}
                             />
                         </div>
                     )}

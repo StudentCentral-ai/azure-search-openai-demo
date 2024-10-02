@@ -27,6 +27,7 @@ interface Props {
     showSpeechOutputBrowser?: boolean;
     showSpeechOutputAzure?: boolean;
     workflowStateNo: number;
+    onMCQAnswerSelected?: (index: string) => void;
 }
 
 export const Answer = ({
@@ -42,7 +43,8 @@ export const Answer = ({
     showFollowupQuestions,
     showSpeechOutputAzure,
     showSpeechOutputBrowser,
-    workflowStateNo
+    workflowStateNo,
+    onMCQAnswerSelected: onAnswerSelected
 }: Props) => {
     const followupQuestions = answer.context?.followup_questions;
     const messageContent = answer.message.content;
@@ -50,13 +52,23 @@ export const Answer = ({
     const { t } = useTranslation();
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
 
+    const [selectedValue, setSelectedValue] = useState<string | null>(null);
+
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const value = event.target.nextElementSibling?.textContent || "";
+        setSelectedValue(value);
+        if (onAnswerSelected) {
+            onAnswerSelected(value);
+        }
+    };
+
     return (
         <Stack className={`${styles.answerContainer} ${isSelected && styles.selected}`} verticalAlign="space-between">
             <Stack.Item>
                 <Stack horizontal horizontalAlign="space-between">
                     {workflowStateNo >= 1 && workflowStateNo <= 3 && <h1>Multi-Choice Questions</h1>}
-                    {workflowStateNo >= 4 && workflowStateNo <= 7 && <h1>Open-Ended Questions</h1>}
-                    {workflowStateNo >= 8 && workflowStateNo <= 9 && <h1>Exercises</h1>}
+                    {workflowStateNo >= 4 && workflowStateNo <= 7 && <h1>Socratic Conversation - Open-Ended Questions</h1>}
+                    {workflowStateNo >= 8 && workflowStateNo <= 9 && <h1>Quantitative Exercises</h1>}
                 </Stack>
             </Stack.Item>
             <Stack.Item>
@@ -87,19 +99,19 @@ export const Answer = ({
                                         QUESTION 1. <strong>Which of the following is considered a risk-free interest rate?</strong>
                                     </p>
                                     <div>
-                                        <input type="radio" id="libor" name="riskFreeRate" value="LIBOR" />
+                                        <input type="radio" id="libor" name="riskFreeRate" value="LIBOR" onChange={handleChange} />
                                         <label htmlFor="libor">A. LIBOR</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="repoRate" name="riskFreeRate" value="Repo rate" />
+                                        <input type="radio" id="repoRate" name="riskFreeRate" value="Repo rate" onChange={handleChange} />
                                         <label htmlFor="repoRate">B. Repo rate</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="treasuryRate" name="riskFreeRate" value="Treasury rate" />
+                                        <input type="radio" id="treasuryRate" name="riskFreeRate" value="Treasury rate" onChange={handleChange} />
                                         <label htmlFor="treasuryRate">C. Treasury rate</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="fedFundsRate" name="riskFreeRate" value="Fed funds rate" />
+                                        <input type="radio" id="fedFundsRate" name="riskFreeRate" value="Fed funds rate" onChange={handleChange} />
                                         <label htmlFor="fedFundsRate">D. Fed funds rate</label>
                                     </div>
                                 </form>
@@ -117,15 +129,21 @@ export const Answer = ({
                                         QUESTION 2. <strong>What does the term LIBOR stand for?</strong>
                                     </p>
                                     <div>
-                                        <input type="radio" id="liborA" name="liborMeaning" value="London Interbank Offered Rate" />
+                                        <input type="radio" id="liborA" name="liborMeaning" value="London Interbank Offered Rate" onChange={handleChange} />
                                         <label htmlFor="liborA">A. London Interbank Offered Rate</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="liborB" name="liborMeaning" value="London Investment Bank Operational Rate" />
+                                        <input
+                                            type="radio"
+                                            id="liborB"
+                                            name="liborMeaning"
+                                            value="London Investment Bank Operational Rate"
+                                            onChange={handleChange}
+                                        />
                                         <label htmlFor="liborB">B. London Investment Bank Operational Rate</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="liborC" name="liborMeaning" value="Low-Interest Bond Offer Rate" />
+                                        <input type="radio" id="liborC" name="liborMeaning" value="Low-Interest Bond Offer Rate" onChange={handleChange} />
                                         <label htmlFor="liborC">C. Low-Interest Bond Offer Rate</label>
                                     </div>
                                 </form>
@@ -146,19 +164,19 @@ export const Answer = ({
                                 </p>
                                 <form onSubmit={event => event.preventDefault()}>
                                     <div>
-                                        <input type="radio" id="q3A" name="q3" value="$105" />
+                                        <input type="radio" id="q3A" name="q3" value="$105" onChange={handleChange} />
                                         <label htmlFor="q3A">A. $105</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="q3B" name="q3" value="$110" />
+                                        <input type="radio" id="q3B" name="q3" value="$110" onChange={handleChange} />
                                         <label htmlFor="q3B">B. $110</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="q3C" name="q3" value="$110.25" />
+                                        <input type="radio" id="q3C" name="q3" value="$110.25" onChange={handleChange} />
                                         <label htmlFor="q3C">C. $110.25</label>
                                     </div>
                                     <div>
-                                        <input type="radio" id="q3D" name="q3" value="$110.38" />
+                                        <input type="radio" id="q3D" name="q3" value="$110.38" onChange={handleChange} />
                                         <label htmlFor="q3D">D. $110.38</label>
                                     </div>
                                 </form>

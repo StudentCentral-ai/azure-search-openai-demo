@@ -54,7 +54,7 @@ const Layout = () => {
                             </li>
                             <li>
                                 <NavLink
-                                    to="/qa"
+                                    to="/" // to="/qa"
                                     className={({ isActive }) => (isActive ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}
                                     onClick={() => setMenuOpen(false)}
                                 >

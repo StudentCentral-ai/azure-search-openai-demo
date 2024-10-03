@@ -83,7 +83,7 @@ const Chat = () => {
     const audio = useRef(new Audio()).current;
     const [isPlaying, setIsPlaying] = useState(false);
 
-    const [workflowStateNo, setWorkflowStateNo] = useState<number>(0);
+    const [workflowStateNo, setWorkflowStateNo] = useState<number>(-1);
 
     const [selectedMCQAnswer, setSelectedMCQAnswer] = useState("");
 
@@ -163,6 +163,17 @@ const Chat = () => {
     const client = useLogin ? useMsal().instance : undefined;
     const { loggedIn } = useContext(LoginContext);
 
+    // const promptOverrides = {
+    //     1: "Custom prompt for step 1",
+    //     2: "Custom prompt for step 2",
+    //     3: "Custom prompt for step 3",
+    //     4: "Custom prompt for step 4",
+    //     5: "Custom prompt for step 5",
+    //     6: "Custom prompt for step 6",
+    //     7: "Custom prompt for step 7",
+    //     8: "Custom prompt for step 8"
+    // };
+
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
 
@@ -183,6 +194,7 @@ const Chat = () => {
                 messages: [...messages, { content: question, role: "user" }],
                 context: {
                     overrides: {
+                        // prompt_template: promptOverrides[workflowStateNo as keyof typeof promptOverrides] || undefined,
                         prompt_template: promptTemplate.length === 0 ? undefined : promptTemplate,
                         exclude_category: excludeCategory.length === 0 ? undefined : excludeCategory,
                         top: retrieveCount,
@@ -391,13 +403,14 @@ const Chat = () => {
                                     <div className={styles.chatMessageGpt}>
                                         <Answer
                                             isStreaming={true}
-                                            key="0"
+                                            key={streamedAnswers.length - 1}
                                             answer={
-                                                streamedAnswers[0] && typeof streamedAnswers[0][1] !== "string"
-                                                    ? streamedAnswers[0][1]
+                                                streamedAnswers[streamedAnswers.length - 1] &&
+                                                typeof streamedAnswers[streamedAnswers.length - 1][1] !== "string"
+                                                    ? streamedAnswers[streamedAnswers.length - 1][1]
                                                     : ({} as ChatAppResponse)
                                             }
-                                            index={0}
+                                            index={streamedAnswers.length - 1}
                                             speechConfig={speechConfig}
                                             isSelected={false}
                                             onCitationClicked={c => onShowCitation(c, 0)}
@@ -437,15 +450,19 @@ const Chat = () => {
                                         </div>
                                     </div>
                                 ))} */}
-                            {!isStreaming && workflowStateNo > 0 && (
+                            {!isStreaming && workflowStateNo >= 0 && (
                                 <div key={0}>
                                     {/* <UserChatMessage message={answers[0] ? answers[0][0] : ""} /> */}
                                     <div className={styles.chatMessageGpt}>
                                         <Answer
                                             isStreaming={false}
-                                            key={0}
-                                            answer={answers[0] && typeof answers[0][1] !== "string" ? answers[0][1] : ({} as ChatAppResponse)}
-                                            index={0}
+                                            key={answers.length - 1}
+                                            answer={
+                                                answers[answers.length - 1] && typeof answers[answers.length - 1][1] !== "string"
+                                                    ? answers[answers.length - 1][1]
+                                                    : ({} as ChatAppResponse)
+                                            }
+                                            index={answers.length - 1}
                                             speechConfig={speechConfig}
                                             isSelected={selectedAnswer === 0 && activeAnalysisPanelTab !== undefined}
                                             onCitationClicked={c => onShowCitation(c, 0)}

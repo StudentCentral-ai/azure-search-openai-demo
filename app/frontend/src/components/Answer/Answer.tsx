@@ -66,6 +66,7 @@ export const Answer = ({
         <Stack className={`${styles.answerContainer} ${isSelected && styles.selected}`} verticalAlign="space-between">
             <Stack.Item>
                 <Stack horizontal horizontalAlign="space-between">
+                    {workflowStateNo === 0 && <h1>Welcome!</h1>}
                     {workflowStateNo >= 1 && workflowStateNo <= 3 && <h1>Multi-Choice Questions</h1>}
                     {workflowStateNo >= 4 && workflowStateNo <= 7 && <h1>Socratic Conversation - Open-Ended Questions</h1>}
                     {workflowStateNo >= 8 && workflowStateNo <= 9 && <h1>Quantitative Exercises</h1>}
@@ -91,9 +92,22 @@ export const Answer = ({
                             onClick={() => onSupportingContentClicked()}
                             disabled={!answer.context.data_points}
                         />
-
+                        {workflowStateNo === 0 && (
+                            <div>
+                                {showSpeechOutputAzure && (
+                                    <SpeechOutputAzure answer={sanitizedAnswerHtml} index={index} speechConfig={speechConfig} isStreaming={isStreaming} />
+                                )}
+                                {showSpeechOutputBrowser && <SpeechOutputBrowser answer={sanitizedAnswerHtml} />}
+                                <div className={styles.answerText}>
+                                    <ReactMarkdown children={sanitizedAnswerHtml} rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]} />
+                                </div>
+                            </div>
+                        )}
                         {workflowStateNo === 1 && (
                             <div>
+                                <div className={styles.answerText}>
+                                    <ReactMarkdown children={sanitizedAnswerHtml} rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]} />
+                                </div>
                                 <form onSubmit={event => event.preventDefault()}>
                                     <p>
                                         QUESTION 1. <strong>Which of the following is considered a risk-free interest rate?</strong>
@@ -115,7 +129,6 @@ export const Answer = ({
                                         <label htmlFor="fedFundsRate">D. Fed funds rate</label>
                                     </div>
                                 </form>
-                                <div></div>
                             </div>
                         )}
 
@@ -124,6 +137,9 @@ export const Answer = ({
                                 <p>
                                     <strong>Correct answer:</strong> C
                                 </p>
+                                <div className={styles.answerText}>
+                                    <ReactMarkdown children={sanitizedAnswerHtml} rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]} />
+                                </div>
                                 <form onSubmit={event => event.preventDefault()}>
                                     <p>
                                         QUESTION 2. <strong>What does the term LIBOR stand for?</strong>
@@ -155,6 +171,9 @@ export const Answer = ({
                                 <p>
                                     <strong>Correct answer:</strong> A
                                 </p>
+                                <div className={styles.answerText}>
+                                    <ReactMarkdown children={sanitizedAnswerHtml} rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]} />
+                                </div>
                                 <p>
                                     QUESTION 3.
                                     <strong>
@@ -250,6 +269,9 @@ export const Answer = ({
                                 <p>
                                     Your answer is: <strong>CORRECT:</strong>
                                 </p>
+                                <div className={styles.answerText}>
+                                    <ReactMarkdown children={sanitizedAnswerHtml} rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]} />
+                                </div>
                                 <div>
                                     <div>
                                         <p>SOLUTION</p>

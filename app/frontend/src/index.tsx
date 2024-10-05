@@ -35,11 +35,9 @@ const router = createHashRouter([
 ]);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-    <React.StrictMode>
-        <I18nextProvider i18n={i18next}>
-            <HelmetProvider>
-                <RouterProvider router={router} />
-            </HelmetProvider>
-        </I18nextProvider>
-    </React.StrictMode>
+    <I18nextProvider i18n={i18next}>
+        <HelmetProvider>
+            <RouterProvider router={router} />
+        </HelmetProvider>
+    </I18nextProvider>
 );

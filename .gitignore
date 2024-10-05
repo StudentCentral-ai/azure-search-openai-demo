@@ -149,3 +149,4 @@ static/
 data/**/*.md5
 
 .DS_Store
+app/frontend/rt-client-0.4.6.tgz

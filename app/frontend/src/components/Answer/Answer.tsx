@@ -92,6 +92,7 @@ export const Answer = ({
                             disabled={!answer.context.data_points}
                         />
 
+                        {/* 
                         {workflowStateNo === 1 && (
                             <div>
                                 <form onSubmit={event => event.preventDefault()}>
@@ -330,7 +331,7 @@ A, A - P  # Return total amount and the interest earned`}
                                 )}
                                 {false && <SpeechOutputBrowser answer={sanitizedAnswerHtml} />}
                             </div>
-                        )}
+                        )} */}
                     </div>
                 </Stack>
             </Stack.Item>

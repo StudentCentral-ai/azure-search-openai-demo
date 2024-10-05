@@ -95,6 +95,12 @@ export const QuestionInput = ({ onSend, disabled, placeholder, clearOnSend, init
                 </Tooltip>
             </div>
             {showSpeechInput && <SpeechInput updateQuestion={setQuestion} />}
+            <button id="start-recording" type="button">
+                Record
+            </button>
+            <button id="stop-recording" type="button" disabled={true}>
+                Stop
+            </button>
         </Stack>
     );
 };

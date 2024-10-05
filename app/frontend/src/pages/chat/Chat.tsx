@@ -37,6 +37,34 @@ import { GPT4VSettings } from "../../components/GPT4VSettings";
 import { LoginContext } from "../../loginContext";
 import { LanguagePicker } from "../../i18n/LanguagePicker";
 
+// realtime
+import { Player } from "../../components/Realtime/player.ts";
+import { Recorder } from "../../components/Realtime/recorder.ts";
+import { LowLevelRTClient, SessionUpdateMessage } from "rt-client";
+
+class Lock {
+    private _locked: boolean = false;
+    private _waiting: Array<() => void> = [];
+
+    async acquire(): Promise<void> {
+        if (this._locked) {
+            await new Promise<void>(resolve => this._waiting.push(resolve));
+        }
+        this._locked = true;
+    }
+
+    release(): void {
+        if (this._waiting.length > 0) {
+            const resolve = this._waiting.shift();
+            if (resolve) {
+                resolve();
+            }
+        } else {
+            this._locked = false;
+        }
+    }
+}
+
 const Chat = () => {
     const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
     const [promptTemplate, setPromptTemplate] = useState<string>("");
@@ -91,6 +119,454 @@ const Chat = () => {
         setSelectedMCQAnswer(value);
         console.log("Selected MCQ Answer:", value);
     };
+
+    // Realtime
+    let realtimeStreaming: LowLevelRTClient;
+    let audioRecorder: Recorder;
+    let audioPlayer: Player;
+
+    const lock = new Lock();
+
+    const ENDPOINT = "https://stce-aiexp-core-dev-aoai.openai.azure.com/";
+    const API_KEY = "OPENAI_API_KEY_SECRET";
+    const DEPLOYMENT = "gpt-4o-realtime-preview-global";
+    const TEMPERATURE = 0.8;
+    const VOICE = "alloy";
+    const SYSTEM_PROMPT = `
+  System Prompt: You are Greg, an empathetic, knowledgeable and encouraging tutor who assists students in reviewing their coursework and preparing effectively for exams.
+You possess academic expertise and teaching skills to engage in discussions on any course topic, guiding the conversation through questions in the style of a Socratic Dialogue. You can propose quantitative exercise and assess the student’s step-by-step reasoning as they progress towards the solution.
+You prefer to assist students by asking guiding questions. 
+When a student asks a question, you respond with another simple question to help them gradually find the solution on their own. You only provide direct answers when you sense the student is truly stuck and it's more beneficial to move forward.
+Respond in a casual and friendly tone.
+Sprinkle in filler words, contractions, idioms, and other casual speech that we use in conversation.
+Emulate the user’s speaking style while maintaining a warm and supportive tone, like a friendly tutor.
+If the user drifts from the topic of the course, gently steer the conversation back to this topic.
+Each of your utterances includes a brief comment, followed by either a new question or an encouraging message to motivate the student to continue their response.
+Be concise, limiting your utterances to 150 words or less.
+---
+
+First message: “Hi Nicolas! Great to have you here— I’m looking forward to a great tutoring session together today!”
+Start the session by assessing:
+•	if the student has sufficient time for the session (30 min to 1h is required)
+•	if the student is in an appropriate work setting (quiet space, stable internet connection)
+Conclude this check by inviting the student to start the quiz
+The Tutoring is composed of 2 sections: 1) Quiz 2) Open-Ended Question
+Context: MCQ to be displayed on screen for the student to answer. Once the student has answered an answer, ask for a comment on why this choice. You prefer to assist students by asking guiding questions. 
+QUESTION 1. Which of the following is considered a risk-free interest rate?
+   - A. LIBOR
+   - B. Repo rate
+   - C. Treasury rate
+   - D. Fed funds rate
+   - E. I don’t know yet
+
+ Correct answer: C
+
+QUESTION 2 - When a bank states that the interest rate on one-year deposits is 10% per annum with semi-annual compounding, how much will $100 grow to at the end of one year?  
+A) $105  
+B) $110  
+C) $110.25  
+D) $110.38  
+E) I don’t know yet
+Correct answer: C
+
+QUESTION 3 - An investor receives $1,100 in one year in return for an investment of $1,000 now.
+Calculate the percentage return per annum with:
+(a) Annual compounding
+(b) Semiannual compounding
+(c) Monthly compounding
+(d) Continuous compounding.
+If the student is stuck on this question, ask him to clarify the formula we should apply for each case.
+Once this formula has been clarified, let the student solve the equation for each one. 
+
+Second part of the tutoring session: 2 Open-Ended discussions to be discussed orally
+
+Open-Ended discussion 1:
+“In the first question of the quiz, LIBOR was mentioned. What do you know about the LIBOR? “
+Assess the student’s answer – is it correct ? it is complete? Ask for additional comments or clarifications in case the answer can be improved. You prefer to assist students by asking guiding questions. 
+
+Open-Ended discussion 2:
+“Suppose you are managing a portfolio of bonds, and the interest rates offered by the market for short-term bonds (e.g., 6-month or 1-year) are quoted on a semi-annual compounding basis. However, the central bank adjusts its monetary policy, and now the standard practice in the market shifts to quoting rates on a continuous compounding basis.” 
+This second discussion is harder than the first one. The student will most likely struggle to answer, help him by going step by step and asking simple guiding questions. 
+Don’t ask more than 5 simple and guiding questions. If after 5 questions, the answer of the student is still incomplete, conclude this discussion by inviting the student to review his course on his own before the next session.
+
+Conclude this tutoring session by asking the student when he is available for the next session. 
+  `;
+
+    /**
+     * Starts the real-time audio streaming process.
+     *
+     * This function initializes the LowLevelRTClient with the provided endpoint, API key,
+     * and deployment or model. It then sends a session configuration message to the server.
+     * If the configuration message fails to send, it logs an error and updates the UI state.
+     *
+     * @param endpoint - The endpoint URL for the real-time audio service.
+     * @param apiKey - The API key for authenticating with the service.
+     * @param deploymentOrModel - The deployment or model identifier for the service.
+     *
+     * @returns A promise that resolves when the audio streaming process has started and
+     *          the initial configuration message has been sent.
+     */
+    async function start_realtime(endpoint: string, apiKey: string, deploymentOrModel: string) {
+        console.log("start_realtime: endpoint: " + endpoint + ", apiKey: ***********" + ", deploymentOrModel: " + deploymentOrModel);
+        realtimeStreaming = new LowLevelRTClient(new URL(endpoint), { key: apiKey }, { deployment: deploymentOrModel });
+        try {
+            console.log("start_realtime: sending session config");
+            await realtimeStreaming.send(createConfigMessage());
+            console.log("start_realtime: sent");
+        } catch (error) {
+            console.log(error);
+            makeNewTextBlock("[Connection error]: Unable to send initial config message. Please check your endpoint and authentication details.");
+            setFormInputState(InputState.ReadyToStart);
+            return;
+        }
+
+        try {
+            // await Promise.all([resetAudio(true), handleRealtimeMessages()]);
+            console.log("start_realtime: resetting audio and handling messages");
+            await resetAudio(true);
+            console.log("start_realtime: reset audio complete. Handling messages...");
+            await handleRealtimeMessages();
+            console.log("start_realtime: handling messages complete");
+        } catch (error) {
+            console.log("start_realtime", error);
+        }
+    }
+
+    function createConfigMessage(): SessionUpdateMessage {
+        let configMessage: SessionUpdateMessage = {
+            type: "session.update",
+            session: {
+                turn_detection: {
+                    type: "server_vad"
+                },
+                input_audio_transcription: {
+                    model: "whisper-1"
+                }
+            }
+        };
+
+        const systemMessage = getSystemMessage();
+        const temperature = getTemperature();
+        const voice = getVoice();
+
+        if (systemMessage) {
+            configMessage.session.instructions = systemMessage;
+        }
+        if (!isNaN(temperature)) {
+            configMessage.session.temperature = temperature;
+        }
+        if (voice) {
+            configMessage.session.voice = voice;
+        }
+        console.log("configMessage: " + JSON.stringify(configMessage));
+        return configMessage;
+    }
+
+    /**
+     * Handles real-time messages from the streaming service.
+     *
+     * This function listens for various types of messages from the `realtimeStreaming.messages()`
+     * async iterator and processes them accordingly. The messages can indicate different events
+     * such as session creation, audio transcript updates, audio data, speech start, transcription
+     * completion, and the end of the response.
+     *
+     * The function performs the following actions based on the message type:
+     * - "session.created": Updates the form input state, creates a new text block indicating the session start.
+     * - "response.audio_transcript.delta": Appends the transcript delta to the current text block.
+     * - "response.audio.delta": Decodes the audio data and plays it using the audio player.
+     * - "input_audio_buffer.speech_started": Indicates the start of speech, prepares a new text block, and clears the audio player.
+     * - "conversation.item.input_audio_transcription.completed": Appends the completed user transcription to the latest input speech block.
+     * - "response.done": Appends a horizontal rule to the form received text container.
+     * - Default: Logs the message as a JSON string.
+     *
+     * After processing all messages, the function resets the audio state.
+     *
+     * @async
+     * @function handleRealtimeMessages
+     * @returns {Promise<void>} A promise that resolves when the message handling is complete.
+     */
+    async function handleRealtimeMessages() {
+        for await (const message of realtimeStreaming.messages()) {
+            let consoleLog = "" + message.type;
+            console.log("handleRealtimeMessages: message: " + JSON.stringify(message));
+            switch (message.type) {
+                case "session.created":
+                    console.log("handleRealtimeMessages: 'Session created' sequence started...");
+                    setFormInputState(InputState.ReadyToStop);
+                    makeNewTextBlock("<< Session Started >>");
+                    makeNewTextBlock();
+                    console.log("handleRealtimeMessages: 'Session created' sequence ended.");
+                    break;
+                case "response.audio_transcript.delta":
+                    console.log("handleRealtimeMessages: Appending transcript delta...");
+                    appendToTextBlock(message.delta);
+                    console.log("handleRealtimeMessages: Transcript delta appended.");
+                    break;
+                case "response.audio.delta":
+                    console.log("handleRealtimeMessages: Playing audio...");
+                    const binary = atob(message.delta);
+                    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+                    const pcmData = new Int16Array(bytes.buffer);
+                    audioPlayer.play(pcmData);
+                    console.log("handleRealtimeMessages: Audio played.");
+                    break;
+
+                case "input_audio_buffer.speech_started":
+                    console.log("handleRealtimeMessages: 'Speech started' sequence started...");
+                    makeNewTextBlock("<< Speech Started >>");
+                    let textElements = formReceivedTextContainer.children;
+                    latestInputSpeechBlock = textElements[textElements.length - 1];
+                    makeNewTextBlock();
+                    audioPlayer.clear();
+                    console.log("handleRealtimeMessages: 'Speech started' sequence ended.");
+                    break;
+                case "conversation.item.input_audio_transcription.completed":
+                    console.log("handleRealtimeMessages: Appending completed user transcription...");
+                    latestInputSpeechBlock.textContent += " User: " + message.transcript;
+                    console.log("handleRealtimeMessages: Completed user transcription appended.");
+                    break;
+                case "response.done":
+                    console.log("handleRealtimeMessages: 'Response done' sequence started...");
+                    formReceivedTextContainer.appendChild(document.createElement("hr"));
+                    console.log("handleRealtimeMessages: 'Response done' sequence ended.");
+                    break;
+                default:
+                    console.log("handleRealtimeMessages: Default case. Logging message as JSON string...");
+                    consoleLog = JSON.stringify(message, null, 2);
+                    break;
+            }
+            if (consoleLog) {
+                console.log(consoleLog);
+            }
+        }
+        console.log("handleRealtimeMessages: Realtime message handling complete. Resetting audio...");
+        await resetAudio(false);
+        console.log("handleRealtimeMessages: Audio reset.");
+    }
+
+    /**
+     * Basic audio handling
+     */
+
+    let recordingActive: boolean = false;
+    let buffer: Uint8Array = new Uint8Array();
+
+    /**
+     * Combines the existing buffer with new data and updates the buffer.
+     *
+     * @param newData - The new data to be appended to the existing buffer.
+     */
+    function combineArray(newData: Uint8Array) {
+        const newBuffer = new Uint8Array(buffer.length + newData.length);
+        newBuffer.set(buffer);
+        newBuffer.set(newData, buffer.length);
+        buffer = newBuffer;
+    }
+
+    /**
+     * Processes an audio recording buffer by converting it to a Uint8Array,
+     * combining it with an existing buffer, and sending it in chunks if the buffer
+     * length exceeds a specified threshold.
+     *
+     * @param data - The audio recording buffer to process.
+     */
+    function processAudioRecordingBuffer(data: Buffer) {
+        const uint8Array = new Uint8Array(data);
+        combineArray(uint8Array);
+        if (buffer.length >= 4800) {
+            const toSend = new Uint8Array(buffer.slice(0, 4800));
+            buffer = new Uint8Array(buffer.slice(4800));
+            const regularArray = String.fromCharCode(...toSend);
+            const base64 = btoa(regularArray);
+            if (recordingActive) {
+                realtimeStreaming.send({
+                    type: "input_audio_buffer.append",
+                    audio: base64
+                });
+            }
+        }
+    }
+
+    /**
+     * Resets the audio recorder and player, and optionally starts a new recording session.
+     *
+     * @param {boolean} startRecording - If true, starts a new recording session after resetting.
+     * @returns {Promise<void>} A promise that resolves when the audio has been reset and optionally started recording.
+     *
+     * @remarks
+     * This function stops any active recording, clears the audio player, reinitializes the recorder and player,
+     * and optionally starts a new recording session if `startRecording` is true.
+     *
+     * @example
+     * ```typescript
+     * // To reset audio and start a new recording session
+     * await resetAudio(true);
+     *
+     * // To reset audio without starting a new recording session
+     * await resetAudio(false);
+     * ```
+     */
+    async function resetAudio(startRecording: boolean) {
+        console.log("resetAudio: Acquiring lock");
+        await lock.acquire();
+        try {
+            console.log("resetAudio: Lock acquired. Switching recorting active to false...");
+            recordingActive = false;
+            if (audioRecorder) {
+                console.log("resetAudio: Stopping audio recorder...");
+                audioRecorder.stop();
+            }
+            if (audioPlayer) {
+                console.log("resetAudio: Clearing audio player...");
+                audioPlayer.clear();
+            }
+            console.log("resetAudio: Reinitializing audio recorder and player...");
+            audioRecorder = new Recorder(processAudioRecordingBuffer);
+            audioPlayer = new Player();
+            await audioPlayer.init(24000);
+            if (startRecording) {
+                console.log("resetAudio: Starting new recording session");
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioRecorder.start(stream);
+                recordingActive = true;
+            }
+        } catch (error) {
+            console.error("resetAudio: Error during audio reset:", error);
+        } finally {
+            console.log("resetAudio: Audio reset process completed");
+            lock.release();
+            console.log("resetAudio: Lock released");
+        }
+    }
+
+    /**
+     * UI and controls
+     */
+
+    let formReceivedTextContainer = document.querySelector<HTMLDivElement>("#received-text-container")!;
+    let formStartButton = document.querySelector<HTMLButtonElement>("#start-recording")!;
+    let formStopButton = document.querySelector<HTMLButtonElement>("#stop-recording")!;
+    //const formEndpointField = document.querySelector<HTMLInputElement>("#endpoint")!;
+    //const formAzureToggle = document.querySelector<HTMLInputElement>("#azure-toggle")!;
+    //const formApiKeyField = document.querySelector<HTMLInputElement>("#api-key")!;
+    //const formDeploymentOrModelField = document.querySelector<HTMLInputElement>("#deployment-or-model")!;
+    //const formSessionInstructionsField = document.querySelector<HTMLTextAreaElement>("#session-instructions")!;
+    //const formTemperatureField = document.querySelector<HTMLInputElement>("#temperature")!;
+    //const formVoiceSelection = document.querySelector<HTMLInputElement>("#voice")!;
+
+    let latestInputSpeechBlock: Element;
+
+    enum InputState {
+        Working,
+        ReadyToStart,
+        ReadyToStop
+    }
+
+    function setFormInputState(state: InputState) {
+        formStartButton.disabled = state != InputState.ReadyToStart;
+        formStopButton.disabled = state != InputState.ReadyToStop;
+    }
+
+    function getSystemMessage(): string {
+        return SYSTEM_PROMPT;
+    }
+
+    function getTemperature(): number {
+        return TEMPERATURE;
+    }
+
+    function getVoice(): "alloy" | "echo" | "shimmer" {
+        return VOICE as "alloy" | "echo" | "shimmer";
+    }
+
+    /**
+     * Creates a new paragraph element with the specified text content and appends it to the formReceivedTextContainer.
+     *
+     * @param text - The text content to be added to the new paragraph element. Defaults to an empty string.
+     */
+    function makeNewTextBlock(text: string = "") {
+        let newElement = document.createElement("p");
+        newElement.textContent = text;
+        formReceivedTextContainer.appendChild(newElement);
+    }
+
+    /**
+     * Appends the given text to the last text block within the formReceivedTextContainer.
+     * If there are no text blocks, a new one is created.
+     *
+     * @param text - The text to append to the last text block.
+     */
+    function appendToTextBlock(text: string) {
+        let textElements = formReceivedTextContainer.children;
+        if (textElements.length == 0) {
+            makeNewTextBlock();
+        }
+        textElements[textElements.length - 1].textContent += text;
+    }
+
+    useEffect(() => {
+        formReceivedTextContainer = document.querySelector<HTMLDivElement>("#received-text-container")!;
+        formStartButton = document.querySelector<HTMLButtonElement>("#start-recording")!;
+        formStopButton = document.querySelector<HTMLButtonElement>("#stop-recording")!;
+
+        //if (formStartButton) {
+        formStartButton.addEventListener("click", async () => {
+            setFormInputState(InputState.Working);
+
+            const endpoint = ENDPOINT;
+            const key = API_KEY;
+            const deploymentOrModel = DEPLOYMENT;
+
+            if (!endpoint && !deploymentOrModel) {
+                alert("Endpoint and Deployment are required for Azure OpenAI");
+                return;
+            }
+
+            // if (!deploymentOrModel) {
+            //     alert("Model is required for OpenAI");
+            //     return;
+            // }
+
+            if (!key) {
+                alert("API Key is required");
+                return;
+            }
+
+            try {
+                start_realtime(endpoint, key, deploymentOrModel);
+            } catch (error) {
+                console.log(error);
+                setFormInputState(InputState.ReadyToStart);
+            }
+
+            // Cleanup event listeners on component unmount
+            return () => {
+                if (formStartButton) {
+                    formStartButton.removeEventListener("click", () => {});
+                }
+                if (formStopButton) {
+                    formStopButton.removeEventListener("click", () => {});
+                }
+            };
+        });
+        //}
+
+        // if (formStopButton) {
+        formStopButton.addEventListener("click", async () => {
+            setFormInputState(InputState.Working);
+            resetAudio(false);
+            realtimeStreaming.close();
+            setFormInputState(InputState.ReadyToStart);
+        });
+        // }
+    }, []);
+    //
+    //
+    //
+    //
+    //
+    //
+    // LEGACY CODE
 
     const speechConfig: SpeechConfig = {
         speechUrls,
@@ -382,6 +858,7 @@ const Chat = () => {
                             {showLanguagePicker && <LanguagePicker onLanguageChange={newLang => i18n.changeLanguage(newLang)} />}
 
                             <ExampleList onExampleClicked={onExampleClicked} useGPT4V={useGPT4V} />
+                            <div id="received-text-container"></div>
                         </div>
                     ) : (
                         <div className={styles.chatMessageStream}>

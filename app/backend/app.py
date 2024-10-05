@@ -107,10 +107,17 @@ async def index():
 async def redirect():
     return ""
 
-
 @bp.route("/favicon.ico")
 async def favicon():
     return await bp.send_static_file("favicon.ico")
+
+@bp.route("/playback-worklet.js")
+async def playbackworklet():
+    return await bp.send_static_file("playback-worklet.js")
+
+@bp.route("/audio-worklet-processor.js")
+async def audioworkletprocessor():
+    return await bp.send_static_file("audio-worklet-processor.js")
 
 
 @bp.route("/assets/<path:path>")

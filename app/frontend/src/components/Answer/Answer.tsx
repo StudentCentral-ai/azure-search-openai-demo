@@ -47,7 +47,7 @@ export const Answer = ({
     onMCQAnswerSelected: onAnswerSelected
 }: Props) => {
     const followupQuestions = answer.context?.followup_questions;
-    const messageContent = answer.message.content;
+    const messageContent = answer.message?.content || "";
     const parsedAnswer = useMemo(() => parseAnswerToHtml(messageContent, isStreaming, onCitationClicked), [answer]);
     const { t } = useTranslation();
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
@@ -66,9 +66,10 @@ export const Answer = ({
         <Stack className={`${styles.answerContainer} ${isSelected && styles.selected}`} verticalAlign="space-between">
             <Stack.Item>
                 <Stack horizontal horizontalAlign="space-between">
-                    {workflowStateNo >= 1 && workflowStateNo <= 3 && <h1>Multi-Choice Questions</h1>}
+                    {/* {workflowStateNo >= 1 && workflowStateNo <= 3 && <h1>Multi-Choice Questions</h1>}
                     {workflowStateNo >= 4 && workflowStateNo <= 7 && <h1>Socratic Conversation - Open-Ended Questions</h1>}
-                    {workflowStateNo >= 8 && workflowStateNo <= 9 && <h1>Quantitative Exercises</h1>}
+                    {workflowStateNo >= 8 && workflowStateNo <= 9 && <h1>Quantitative Exercises</h1>} */}
+                    <h1>Tutoring Session</h1>
                 </Stack>
             </Stack.Item>
             <Stack.Item>
@@ -89,7 +90,7 @@ export const Answer = ({
                             title={t("tooltips.showSupportingContent")}
                             ariaLabel={t("tooltips.showSupportingContent")}
                             onClick={() => onSupportingContentClicked()}
-                            disabled={!answer.context.data_points}
+                            disabled={true} //disabled={!answer.context.data_points ? true : false}
                         />
 
                         {/* 

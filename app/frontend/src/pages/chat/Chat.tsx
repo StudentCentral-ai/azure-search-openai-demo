@@ -164,6 +164,7 @@ Each of your utterances includes a brief comment, followed by either a new quest
 Be concise, limiting your utterances to 150 words or less.
 It is extremely important that any JSON data shall be rendered exactly as you have memorized it.
 If you are representing math formulas, please respect strict rule of wrapping any formula between delimiters: $$...$$ for block math or $...$ for inline math.
+The language spoken by the student and you is: {{{language}}}. You will discuss with the student in the requested language, with the native accent from the original country of the anguage.
 
 ---
 
@@ -612,7 +613,7 @@ Conclude this tutoring session by asking the student
         if (prmpt && prmpt.length > 0) {
             return prmpt;
         }
-        return SYSTEM_PROMPT;
+        return SYSTEM_PROMPT.replace("{{{language}}}", i18n.language);
     }
 
     function getTemperature(): number {

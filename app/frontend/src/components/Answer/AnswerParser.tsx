@@ -10,7 +10,7 @@ export function parseAnswerToHtml(answer: string, isStreaming: boolean, onCitati
     const citations: string[] = [];
 
     // trim any whitespace from the end of the answer after removing follow-up questions
-    let parsedAnswer = answer.trim();
+    let parsedAnswer = answer?.trim();
 
     // Omit a citation that is still being typed during streaming
     if (isStreaming) {

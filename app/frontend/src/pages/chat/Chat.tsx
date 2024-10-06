@@ -37,10 +37,24 @@ import { GPT4VSettings } from "../../components/GPT4VSettings";
 import { LoginContext } from "../../loginContext";
 import { LanguagePicker } from "../../i18n/LanguagePicker";
 
+// PromptRenderer
+import PromptRenderer from "../../components/PromptRenderer/PromptRenderer";
+import { createRoot } from "react-dom/client";
+
 // realtime
 import { Player } from "../../components/Realtime/player.ts";
 import { Recorder } from "../../components/Realtime/recorder.ts";
 import { LowLevelRTClient, SessionUpdateMessage } from "rt-client";
+
+// PromptRenderer
+// const samplePrompt = `Please answer to the following question : <mcqdata>{"question":"Which one is a vegetable?", "choices": {"A": "apple","B": "orange", "C": "tomato"}}</mcqdata> What is your answer ?`;
+const q1 = `<mcqdata>{"question":"Which of the following is considered a risk-free interest rate?", "choices": {"A": "LIBOR","B": "Repo rate", "C": "Treasury rate", "D": "Fed funds rate", "E": "I don’t know yet"}}</mcqdata>`;
+const q2 = `<mcqdata>{"question":"Here is the formula of compounded interest to an initial Investment “A” where “R” is the interest rate and “m” is the compounding frequency:
+A(1+R/m)mn
+True or False: Increasing the compounding frequency “m” (e.g., from annual to monthly or daily compounding) increases the terminal value of the investment because interest is applied more frequently, allowing for interest to be earned on previously accumulated interest.", "choices": {"A": "True","B": "False"}}</mcqdata>
+`;
+
+// Realtime
 
 let prmpt: string = "";
 
@@ -122,6 +136,10 @@ const Chat = () => {
         console.log("Selected MCQ Answer:", value);
     };
 
+    // PromptRenderer
+    const [mcqPrompt, setMcqPrompt] = useState<string>("");
+    const [studentTurn, setStudentTurn] = useState<string>("");
+
     // Realtime
     let realtimeStreaming: LowLevelRTClient;
     let audioRecorder: Recorder;
@@ -134,8 +152,7 @@ const Chat = () => {
     const DEPLOYMENT = "gpt-4o-realtime-preview-global";
     const TEMPERATURE = 0.8;
     const VOICE = "echo";
-    const SYSTEM_PROMPT = `
-  System Prompt: You are Greg, an empathetic, knowledgeable and encouraging tutor who assists students in reviewing their coursework and preparing effectively for exams.
+    const SYSTEM_PROMPT = `System Prompt: You are Greg, an empathetic, knowledgeable and encouraging tutor who assists students in reviewing their coursework and preparing effectively for exams.
 You possess academic expertise and teaching skills to engage in discussions on any course topic, guiding the conversation through questions in the style of a Socratic Dialogue. You can propose quantitative exercise and assess the student’s step-by-step reasoning as they progress towards the solution.
 You prefer to assist students by asking guiding questions. 
 When a student asks a question, you respond with another simple question to help them gradually find the solution on their own. You only provide direct answers when you sense the student is truly stuck and it's more beneficial to move forward.
@@ -145,54 +162,73 @@ Emulate the user’s speaking style while maintaining a warm and supportive tone
 If the user drifts from the topic of the course, gently steer the conversation back to this topic.
 Each of your utterances includes a brief comment, followed by either a new question or an encouraging message to motivate the student to continue their response.
 Be concise, limiting your utterances to 150 words or less.
+It is extremely important that any JSON data shall be rendered exactly as you have memorized it.
+If you are representing math formulas, please respect strict rule of wrapping any formula between delimiters: $$...$$ for block math or $...$ for inline math.
+
 ---
 
 First message: “Hi Nicolas! Great to have you here— I’m looking forward to a great tutoring session together today!”
 Start the session by assessing:
 •	if the student has sufficient time for the session (30 min to 1h is required)
+Then ask,
 •	if the student is in an appropriate work setting (quiet space, stable internet connection)
-Conclude this check by inviting the student to start the quiz
-The Tutoring is composed of 2 sections: 1) Quiz 2) Open-Ended Question
-Context: MCQ to be displayed on screen for the student to answer. Once the student has answered an answer, ask for a comment on why this choice. You prefer to assist students by asking guiding questions. 
-QUESTION 1. Which of the following is considered a risk-free interest rate?
-   - A. LIBOR
-   - B. Repo rate
-   - C. Treasury rate
-   - D. Fed funds rate
-   - E. I don’t know yet
 
- Correct answer: C
+Conclude this check by inviting the student to start the Tutoring session
+The Tutoring session is composed of 3 distinct sections: 
+1) Quiz 
+2) Open-Ended Questions 
+3) Quantitative Exercise
 
-QUESTION 2 - When a bank states that the interest rate on one-year deposits is 10% per annum with semi-annual compounding, how much will $100 grow to at the end of one year?  
-A) $105  
-B) $110  
-C) $110.25  
-D) $110.38  
-E) I don’t know yet
+
+QUIZ
+Context: MCQ and true/false questions to be displayed on screen for the student to answer. Give the MCQ in the exact form as you have memorized, JSON format including.
+Once the student has answered an answer, ask for a comment on why this choice. You prefer to assist students by asking guiding questions. 
+
+QUESTION 1. {"question":"Which of the following is considered a risk-free interest rate?", "choices": {"A": "LIBOR","B": "Repo rate", "C": "Treasury rate", "D": "Fed funds rate", "E": "I don’t know yet"}}
+
 Correct answer: C
+Ask the student to elaborate on his selected answer. 
+Then, if the student selected the wrong answer, ask the definition of “C. Treasury Rate”, and whether it could be the right answer.
 
-QUESTION 3 - An investor receives $1,100 in one year in return for an investment of $1,000 now.
-Calculate the percentage return per annum with:
-(a) Annual compounding
-(b) Semiannual compounding
-(c) Monthly compounding
-(d) Continuous compounding.
+Context: MCQ and true/false questions to be displayed on screen for the student to answer. Give the MCQ in the exact form as you memorize, tags and JSON format including. 
+Once the student has answered an answer, ask for a comment on why this choice. You prefer to assist students by asking guiding questions. 
+
+QUESTION 2. {"question":"Here is the formula of compounded interest to an initial Investment “A” where “R” is the interest rate and “m” is the compounding frequency: A(1+R/m)mn. True or False: Increasing the compounding frequency “m” (e.g., from annual to monthly or daily compounding) increases the terminal value of the investment because interest is applied more frequently, allowing for interest to be earned on previously accumulated interest.", "choices": {"A": "True","B": "False"}}
+
+Correct Answer: True
+Ask the student to elaborate on his selected answer. 
+Once the student has elaborated on his answer, ask him “what is “n” in the formula
+
+Second part of the tutoring session: 2 Open-Ended discussions to be discussed orally
+Open-Ended Questions
+Discussion 1:
+“In the first question of the quiz, LIBOR was mentioned. What do you know about the LIBOR? “
+Assess the student’s answer – is it correct? it is complete? Ask for additional comments or clarifications in case the answer can be improved. You prefer to assist students by asking guiding questions. 
+Discussion 2:
+Imagine you manage a bond portfolio, and interest rates for short-term bonds are usually given with semi-annual compounding. If the central bank changes its policy and the market starts quoting rates using continuous compounding, how would this affect your portfolio management?
+This second discussion is harder than the first one. The student will most likely struggle to answer, help him by going step by step and asking simple guiding questions
+-	guiding questions on the difference between the 2 compounding methods
+-	guiding questions on the equation which allows to convert one rate into another.
+If after 4 questions in total, the answer of the student is still incomplete, conclude this discussion by inviting the student to review his course on his own before the next session.
+
+Third part of the tutoring session: Quantitative Exercises
+Quantitative Exercises
+
+EXERCISE 1 - When a bank states that the interest rate on one-year deposits is 10% per annum with semi-annual compounding, how much will $100 grow to at the end of one year?  
+Correct answer: $110.25
 If the student is stuck on this question, ask him to clarify the formula we should apply for each case.
 Once this formula has been clarified, let the student solve the equation for each one. 
 
-Second part of the tutoring session: 2 Open-Ended discussions to be discussed orally
+EXERCISE 2 - When a bank states that the interest rate on one-year deposits is 10% per annum with continuous compounding, how much will $100 grow to at the end of one year?  
+Correct answer: $110.52
+If the student is stuck on this question, ask him to clarify the formula we should apply for each case.
 
-Open-Ended discussion 1:
-“In the first question of the quiz, LIBOR was mentioned. What do you know about the LIBOR? “
-Assess the student’s answer – is it correct ? it is complete? Ask for additional comments or clarifications in case the answer can be improved. You prefer to assist students by asking guiding questions. 
+Conclude this tutoring session by asking the student 
+-	when he is available for the next session
+-	to review what he has learnt so far, and get ready with the next chapter of his course: “bond pricing”
 
-Open-Ended discussion 2:
-“Suppose you are managing a portfolio of bonds, and the interest rates offered by the market for short-term bonds (e.g., 6-month or 1-year) are quoted on a semi-annual compounding basis. However, the central bank adjusts its monetary policy, and now the standard practice in the market shifts to quoting rates on a continuous compounding basis.” 
-This second discussion is harder than the first one. The student will most likely struggle to answer, help him by going step by step and asking simple guiding questions. 
-Don’t ask more than 5 simple and guiding questions. If after 5 questions, the answer of the student is still incomplete, conclude this discussion by inviting the student to review his course on his own before the next session.
 
-Conclude this tutoring session by asking the student when he is available for the next session. 
-  `;
+`;
 
     /**
      * Starts the real-time audio streaming process.
@@ -236,7 +272,8 @@ Conclude this tutoring session by asking the student when he is available for th
             console.log("start_realtime: sent");
         } catch (error) {
             console.log(error);
-            makeNewTextBlock("[Connection error]: Unable to send initial config message. Please check your endpoint and authentication details.");
+            //makeNewTextBlock("[Connection error]: Unable to send initial config message. Please check your endpoint and authentication details.");
+            setMcqPrompt("[Connection error]: Unable to send initial config message. Please check your endpoint and authentication details.");
             setFormInputState(InputState.ReadyToStart);
             return;
         }
@@ -315,6 +352,7 @@ Conclude this tutoring session by asking the student when he is available for th
             context: { data_points: [], followup_questions: [], thoughts: [] },
             session_state: null
         } as ChatAppResponse;
+        let tempMcqData = "";
 
         const updateAnswerState = (newContent: string) => {
             return new Promise(resolve => {
@@ -336,13 +374,13 @@ Conclude this tutoring session by asking the student when he is available for th
         try {
             for await (const message of realtimeStreaming.messages()) {
                 let consoleLog = "" + message.type;
-                console.log("handleRealtimeMessages: message: " + JSON.stringify(message));
+                // console.log("handleRealtimeMessages: message: " + JSON.stringify(message));
                 switch (message.type) {
                     case "session.created":
                         console.log("handleRealtimeMessages: 'Session created' sequence started...");
                         setFormInputState(InputState.ReadyToStop);
                         // makeNewTextBlock("<< Session Started >>");
-                        makeNewTextBlock();
+                        // makeNewTextBlock();
                         askResponse = {
                             message: {} as ResponseMessage,
                             delta: {} as ResponseMessage,
@@ -352,10 +390,24 @@ Conclude this tutoring session by asking the student when he is available for th
                         console.log("handleRealtimeMessages: 'Session created' sequence ended.");
                         break;
                     case "response.audio_transcript.delta":
-                        console.log("handleRealtimeMessages: Appending transcript delta...");
-                        appendToTextBlock(message.delta);
-                        updateAnswerState(message.delta);
-                        console.log("handleRealtimeMessages: Transcript delta appended.");
+                        console.log("handleRealtimeMessages: Appending transcript delta: " + message.delta);
+                        // if (message.delta.includes('{"')) {
+
+                        tempMcqData += message.delta;
+                        console.log("handleRealtimeMessages: temp prompt: " + tempMcqData);
+
+                        //     console.log("handleRealtimeMessages: MCQ start detected: " + tempMcqData);
+                        // } else if (message.delta.includes("}}")) {
+                        //     tempMcqData += message.delta + "</mcqdata>";
+                        //     setMcqPrompt(tempMcqData);
+                        //     //displayPromptRendering();
+                        //     console.log("handleRealtimeMessages: MCQ end detected: " + mcqPrompt);
+                        // } else {
+                        //     appendToTextBlock(message.delta);
+                        //     updateAnswerState(message.delta);
+                        //     console.log("handleRealtimeMessages: Transcript delta appended.");
+                        // }
+                        // appendToTextBlock(message.delta);
                         break;
                     case "response.audio.delta":
                         console.log("handleRealtimeMessages: Playing audio...");
@@ -370,21 +422,40 @@ Conclude this tutoring session by asking the student when he is available for th
                         console.log("handleRealtimeMessages: 'Speech started' sequence started...");
                         //makeNewTextBlock("<< Speech Started >>");
                         let textElements = formReceivedTextContainer.children;
-                        latestInputSpeechBlock = textElements[textElements.length - 1];
-                        makeNewTextBlock();
+                        //latestInputSpeechBlock = textElements[textElements.length - 1];
+                        //makeNewTextBlock();
                         audioPlayer.clear();
+                        tempMcqData = "";
+
+                        //displayPromptRendering();
                         console.log("handleRealtimeMessages: 'Speech started' sequence ended.");
                         break;
                     case "conversation.item.input_audio_transcription.completed":
                         console.log("handleRealtimeMessages: Appending completed user transcription...");
-                        latestInputSpeechBlock.textContent += "Nicolas: " + message.transcript;
+                        //latestInputSpeechBlock.textContent += "Nicolas: " + message.transcript;
                         question = message.transcript;
+                        setStudentTurn("Nicolas: " + question);
+                        setMcqPrompt("Greg: ...");
+
                         console.log("handleRealtimeMessages: Completed user transcription appended.");
                         break;
                     case "response.done":
                         console.log("handleRealtimeMessages: 'Response done' sequence started...");
-                        formReceivedTextContainer.appendChild(document.createElement("hr"));
+                        //formReceivedTextContainer.appendChild(document.createElement("hr"));
                         console.log("handleRealtimeMessages: 'Response done' sequence ended.");
+                        break;
+                    case "response.audio_transcript.done":
+                        console.log("handleRealtimeMessages: 'response.audio_transcript.done' sequence started...");
+                        //displayPromptRendering();
+                        //let textElements1 = formReceivedTextContainer.children;
+                        //if (textElements1 && textElements1.length > 0) {
+                        console.log("displayPromptRendering: switching to render prompt via PromptRenderer...");
+                        // let lastElement = textElements1[textElements1.length - 1];
+                        // let text = lastElement.textContent || "";
+                        setMcqPrompt("Greg: " + tempMcqData);
+                        //lastElement.textContent?.replace("<mcqdata>*</mcqdata>", "");
+                        //}
+                        console.log("handleRealtimeMessages: 'response.audio_transcript.done' sequence ended.");
                         break;
                     default:
                         console.log("handleRealtimeMessages: Default case. Logging message as JSON string...");
@@ -557,11 +628,11 @@ Conclude this tutoring session by asking the student when he is available for th
      *
      * @param text - The text content to be added to the new paragraph element. Defaults to an empty string.
      */
-    function makeNewTextBlock(text: string = "") {
-        let newElement = document.createElement("p");
-        newElement.textContent = text;
-        formReceivedTextContainer.appendChild(newElement);
-    }
+    // function makeNewTextBlock(text: string = "") {
+    //     let newElement = document.createElement("p");
+    //     newElement.textContent = text;
+    //     formReceivedTextContainer.appendChild(newElement);
+    // }
 
     /**
      * Appends the given text to the last text block within the formReceivedTextContainer.
@@ -569,13 +640,24 @@ Conclude this tutoring session by asking the student when he is available for th
      *
      * @param text - The text to append to the last text block.
      */
-    function appendToTextBlock(text: string) {
-        let textElements = formReceivedTextContainer.children;
-        if (textElements.length == 0) {
-            makeNewTextBlock();
-        }
-        textElements[textElements.length - 1].textContent += text;
-    }
+    // function appendToTextBlock(text: string) {
+    //     let textElements = formReceivedTextContainer.children;
+    //     if (textElements.length == 0) {
+    //         makeNewTextBlock();
+    //     }
+    //     textElements[textElements.length - 1].textContent += text;
+    // }
+
+    // function displayPromptRendering() {
+    //     let textElements = formReceivedTextContainer.children;
+    //     if (textElements.length > 0) {
+    //         console.log("displayPromptRendering: switching to render prompt via PromptRenderer...");
+    //         let lastElement = textElements[textElements.length - 1];
+    //         let text = lastElement.textContent || "";
+    //         setMcqPrompt(text);
+    //         //lastElement.textContent?.replace("<mcqdata>*</mcqdata>", "");
+    //     }
+    // }
 
     useEffect(() => {
         formReceivedTextContainer = document.querySelector<HTMLDivElement>("#received-text-container")!;
@@ -983,6 +1065,8 @@ Conclude this tutoring session by asking the student when he is available for th
             <div className={styles.chatRoot}>
                 <div className={styles.chatContainer}>
                     <div id="received-text-container" className={styles.chatMessageGptMinWidth}></div>
+                    <PromptRenderer prompt={studentTurn} />
+                    <PromptRenderer prompt={mcqPrompt} />
                     {!lastQuestionRef.current ? (
                         <div className={styles.chatEmptyState}>
                             <SparkleFilled fontSize={"120px"} primaryFill={"rgba(115, 118, 225, 1)"} aria-hidden="true" aria-label="Chat logo" />

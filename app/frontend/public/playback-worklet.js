@@ -19,7 +19,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
     }
 
     process(inputs, outputs, parameters) {
-        console.log("PlaybackWorklet.process");
+        //console.log("PlaybackWorklet.process");
         const output = outputs[0];
         const channel = output[0];
 
@@ -31,7 +31,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
             channel.set(this.buffer.map(v => v / 32768));
             this.buffer = [];
         }
-        console.log("PlaybackWorklet.process ended");
+        //console.log("PlaybackWorklet.process ended");
         return true;
     }
 }

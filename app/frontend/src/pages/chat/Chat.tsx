@@ -42,6 +42,8 @@ import { Player } from "../../components/Realtime/player.ts";
 import { Recorder } from "../../components/Realtime/recorder.ts";
 import { LowLevelRTClient, SessionUpdateMessage } from "rt-client";
 
+let prmpt: string = "";
+
 class Lock {
     private _locked: boolean = false;
     private _waiting: Array<() => void> = [];
@@ -131,7 +133,7 @@ const Chat = () => {
     const API_KEY = "8e0d555581f3452f850b9f93b2ea0148";
     const DEPLOYMENT = "gpt-4o-realtime-preview-global";
     const TEMPERATURE = 0.8;
-    const VOICE = "alloy";
+    const VOICE = "echo";
     const SYSTEM_PROMPT = `
   System Prompt: You are Greg, an empathetic, knowledgeable and encouraging tutor who assists students in reviewing their coursework and preparing effectively for exams.
 You possess academic expertise and teaching skills to engage in discussions on any course topic, guiding the conversation through questions in the style of a Socratic Dialogue. You can propose quantitative exercise and assess the student’s step-by-step reasoning as they progress towards the solution.
@@ -206,7 +208,26 @@ Conclude this tutoring session by asking the student when he is available for th
      * @returns A promise that resolves when the audio streaming process has started and
      *          the initial configuration message has been sent.
      */
-    async function start_realtime(endpoint: string, apiKey: string, deploymentOrModel: string) {
+    async function start_realtime() {
+        const endpoint = ENDPOINT;
+        const apiKey = API_KEY;
+        const deploymentOrModel = DEPLOYMENT;
+
+        if (!endpoint && !deploymentOrModel) {
+            alert("Endpoint and Deployment are required for Azure OpenAI");
+            return;
+        }
+
+        // if (!deploymentOrModel) {
+        //     alert("Model is required for OpenAI");
+        //     return;
+        // }
+
+        if (!apiKey) {
+            alert("API Key is required");
+            return;
+        }
+
         console.log("start_realtime: endpoint: " + endpoint + ", apiKey: ***********" + ", deploymentOrModel: " + deploymentOrModel);
         realtimeStreaming = new LowLevelRTClient(new URL(endpoint), { key: apiKey }, { deployment: deploymentOrModel });
         try {
@@ -286,62 +307,110 @@ Conclude this tutoring session by asking the student when he is available for th
      * @returns {Promise<void>} A promise that resolves when the message handling is complete.
      */
     async function handleRealtimeMessages() {
-        for await (const message of realtimeStreaming.messages()) {
-            let consoleLog = "" + message.type;
-            console.log("handleRealtimeMessages: message: " + JSON.stringify(message));
-            switch (message.type) {
-                case "session.created":
-                    console.log("handleRealtimeMessages: 'Session created' sequence started...");
-                    setFormInputState(InputState.ReadyToStop);
-                    makeNewTextBlock("<< Session Started >>");
-                    makeNewTextBlock();
-                    console.log("handleRealtimeMessages: 'Session created' sequence ended.");
-                    break;
-                case "response.audio_transcript.delta":
-                    console.log("handleRealtimeMessages: Appending transcript delta...");
-                    appendToTextBlock(message.delta);
-                    console.log("handleRealtimeMessages: Transcript delta appended.");
-                    break;
-                case "response.audio.delta":
-                    console.log("handleRealtimeMessages: Playing audio...");
-                    const binary = atob(message.delta);
-                    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-                    const pcmData = new Int16Array(bytes.buffer);
-                    audioPlayer.play(pcmData);
-                    console.log("handleRealtimeMessages: Audio played.");
-                    break;
+        let question: string = "DEFAULT QUESTION";
+        let answer: string = "";
+        let askResponse: ChatAppResponse = {
+            message: {} as ResponseMessage,
+            delta: {} as ResponseMessage,
+            context: { data_points: [], followup_questions: [], thoughts: [] },
+            session_state: null
+        } as ChatAppResponse;
 
-                case "input_audio_buffer.speech_started":
-                    console.log("handleRealtimeMessages: 'Speech started' sequence started...");
-                    makeNewTextBlock("<< Speech Started >>");
-                    let textElements = formReceivedTextContainer.children;
-                    latestInputSpeechBlock = textElements[textElements.length - 1];
-                    makeNewTextBlock();
-                    audioPlayer.clear();
-                    console.log("handleRealtimeMessages: 'Speech started' sequence ended.");
-                    break;
-                case "conversation.item.input_audio_transcription.completed":
-                    console.log("handleRealtimeMessages: Appending completed user transcription...");
-                    latestInputSpeechBlock.textContent += " User: " + message.transcript;
-                    console.log("handleRealtimeMessages: Completed user transcription appended.");
-                    break;
-                case "response.done":
-                    console.log("handleRealtimeMessages: 'Response done' sequence started...");
-                    formReceivedTextContainer.appendChild(document.createElement("hr"));
-                    console.log("handleRealtimeMessages: 'Response done' sequence ended.");
-                    break;
-                default:
-                    console.log("handleRealtimeMessages: Default case. Logging message as JSON string...");
-                    consoleLog = JSON.stringify(message, null, 2);
-                    break;
+        const updateAnswerState = (newContent: string) => {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    answer += newContent;
+                    const latestResponse: ChatAppResponse = {
+                        ...askResponse,
+                        message: { content: answer, role: askResponse.message.role }
+                    };
+                    console.log("updateAnswerState: setting streamed answers...");
+                    console.log("updateAnswerState: answers: " + JSON.stringify(answers));
+                    console.log("updateAnswerState: question: " + question);
+                    setStreamedAnswers([...answers, [question, latestResponse]]);
+                    resolve(null);
+                }, 33);
+            });
+        };
+
+        try {
+            for await (const message of realtimeStreaming.messages()) {
+                let consoleLog = "" + message.type;
+                console.log("handleRealtimeMessages: message: " + JSON.stringify(message));
+                switch (message.type) {
+                    case "session.created":
+                        console.log("handleRealtimeMessages: 'Session created' sequence started...");
+                        setFormInputState(InputState.ReadyToStop);
+                        // makeNewTextBlock("<< Session Started >>");
+                        makeNewTextBlock();
+                        askResponse = {
+                            message: {} as ResponseMessage,
+                            delta: {} as ResponseMessage,
+                            context: { data_points: [], followup_questions: [], thoughts: [] },
+                            session_state: null
+                        } as ChatAppResponse;
+                        console.log("handleRealtimeMessages: 'Session created' sequence ended.");
+                        break;
+                    case "response.audio_transcript.delta":
+                        console.log("handleRealtimeMessages: Appending transcript delta...");
+                        appendToTextBlock(message.delta);
+                        updateAnswerState(message.delta);
+                        console.log("handleRealtimeMessages: Transcript delta appended.");
+                        break;
+                    case "response.audio.delta":
+                        console.log("handleRealtimeMessages: Playing audio...");
+                        const binary = atob(message.delta);
+                        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+                        const pcmData = new Int16Array(bytes.buffer);
+                        audioPlayer.play(pcmData);
+                        console.log("handleRealtimeMessages: Audio played.");
+                        break;
+
+                    case "input_audio_buffer.speech_started":
+                        console.log("handleRealtimeMessages: 'Speech started' sequence started...");
+                        //makeNewTextBlock("<< Speech Started >>");
+                        let textElements = formReceivedTextContainer.children;
+                        latestInputSpeechBlock = textElements[textElements.length - 1];
+                        makeNewTextBlock();
+                        audioPlayer.clear();
+                        console.log("handleRealtimeMessages: 'Speech started' sequence ended.");
+                        break;
+                    case "conversation.item.input_audio_transcription.completed":
+                        console.log("handleRealtimeMessages: Appending completed user transcription...");
+                        latestInputSpeechBlock.textContent += "Nicolas: " + message.transcript;
+                        question = message.transcript;
+                        console.log("handleRealtimeMessages: Completed user transcription appended.");
+                        break;
+                    case "response.done":
+                        console.log("handleRealtimeMessages: 'Response done' sequence started...");
+                        formReceivedTextContainer.appendChild(document.createElement("hr"));
+                        console.log("handleRealtimeMessages: 'Response done' sequence ended.");
+                        break;
+                    default:
+                        console.log("handleRealtimeMessages: Default case. Logging message as JSON string...");
+                        consoleLog = JSON.stringify(message, null, 2);
+                        break;
+                }
+                if (consoleLog) {
+                    console.log(consoleLog);
+                }
             }
-            if (consoleLog) {
-                console.log(consoleLog);
-            }
+        } catch (error) {
+            console.error("handleRealtimeMessages: Error occurred while handling messages:", error);
+        } finally {
+            console.log("handleRealtimeMessages: Realtime message handling complete. Resetting audio...");
+            await resetAudio(false);
+            setIsStreaming(false);
+            console.log("handleRealtimeMessages: Audio reset.");
         }
-        console.log("handleRealtimeMessages: Realtime message handling complete. Resetting audio...");
-        await resetAudio(false);
-        console.log("handleRealtimeMessages: Audio reset.");
+        const fullResponse: ChatAppResponse = {
+            ...askResponse,
+            message: { content: answer, role: askResponse.message.role }
+        };
+        console.log("handleRealtimeMessages: Setting non-streamed answers...");
+        console.log("handleRealtimeMessages: answers: " + JSON.stringify(answers));
+        console.log("handleRealtimeMessages: question: " + question);
+        setAnswers([...answers, [question, fullResponse]]);
     }
 
     /**
@@ -468,6 +537,10 @@ Conclude this tutoring session by asking the student when he is available for th
     }
 
     function getSystemMessage(): string {
+        console.log("getSystemMessage: returning prompt template: " + prmpt);
+        if (prmpt && prmpt.length > 0) {
+            return prmpt;
+        }
         return SYSTEM_PROMPT;
     }
 
@@ -513,27 +586,8 @@ Conclude this tutoring session by asking the student when he is available for th
         formStartButton.addEventListener("click", async () => {
             setFormInputState(InputState.Working);
 
-            const endpoint = ENDPOINT;
-            const key = API_KEY;
-            const deploymentOrModel = DEPLOYMENT;
-
-            if (!endpoint && !deploymentOrModel) {
-                alert("Endpoint and Deployment are required for Azure OpenAI");
-                return;
-            }
-
-            // if (!deploymentOrModel) {
-            //     alert("Model is required for OpenAI");
-            //     return;
-            // }
-
-            if (!key) {
-                alert("API Key is required");
-                return;
-            }
-
             try {
-                start_realtime(endpoint, key, deploymentOrModel);
+                makeApiRequest("INITIAL QUESTION");
             } catch (error) {
                 console.log(error);
                 setFormInputState(InputState.ReadyToStart);
@@ -555,7 +609,7 @@ Conclude this tutoring session by asking the student when he is available for th
         formStopButton.addEventListener("click", async () => {
             setFormInputState(InputState.Working);
             resetAudio(false);
-            realtimeStreaming.close();
+            realtimeStreaming.close(); // !! IMPORTANT, Close the connection
             setFormInputState(InputState.ReadyToStart);
         });
         // }
@@ -565,9 +619,14 @@ Conclude this tutoring session by asking the student when he is available for th
     //
     //
     //
-    //
+    // --------------------------------------------------------------------------
     // LEGACY CODE
-
+    // --------------------------------------------------------------------------
+    //
+    //
+    //
+    //
+    //
     const speechConfig: SpeechConfig = {
         speechUrls,
         setSpeechUrls,
@@ -650,56 +709,57 @@ Conclude this tutoring session by asking the student when he is available for th
         const token = client ? await getToken(client) : undefined;
 
         try {
-            const messages: ResponseMessage[] = answers.flatMap(a => [
-                { content: a[0], role: "user" },
-                { content: a[1].message.content, role: "assistant" }
-            ]);
+            // const messages: ResponseMessage[] = answers.flatMap(a => [
+            //     { content: a[0], role: "user" },
+            //     { content: a[1].message.content, role: "assistant" }
+            // ]);
 
-            const request: ChatAppRequest = {
-                messages: [...messages, { content: question, role: "user" }],
-                context: {
-                    overrides: {
-                        prompt_template: promptTemplate.length === 0 ? undefined : promptTemplate,
-                        exclude_category: excludeCategory.length === 0 ? undefined : excludeCategory,
-                        top: retrieveCount,
-                        temperature: temperature,
-                        minimum_reranker_score: minimumRerankerScore,
-                        minimum_search_score: minimumSearchScore,
-                        retrieval_mode: retrievalMode,
-                        semantic_ranker: useSemanticRanker,
-                        semantic_captions: useSemanticCaptions,
-                        suggest_followup_questions: useSuggestFollowupQuestions,
-                        use_oid_security_filter: useOidSecurityFilter,
-                        use_groups_security_filter: useGroupsSecurityFilter,
-                        vector_fields: vectorFieldList,
-                        use_gpt4v: useGPT4V,
-                        gpt4v_input: gpt4vInput,
-                        language: i18n.language,
-                        ...(seed !== null ? { seed: seed } : {})
-                    }
-                },
-                // AI Chat Protocol: Client must pass on any session state received from the server
-                session_state: answers.length ? answers[answers.length - 1][1].session_state : null
-            };
+            // const request: ChatAppRequest = {
+            //     messages: [...messages, { content: question, role: "user" }],
+            //     context: {
+            //         overrides: {
+            //             prompt_template: promptTemplate.length === 0 ? undefined : promptTemplate,
+            //             exclude_category: excludeCategory.length === 0 ? undefined : excludeCategory,
+            //             top: retrieveCount,
+            //             temperature: temperature,
+            //             minimum_reranker_score: minimumRerankerScore,
+            //             minimum_search_score: minimumSearchScore,
+            //             retrieval_mode: retrievalMode,
+            //             semantic_ranker: useSemanticRanker,
+            //             semantic_captions: useSemanticCaptions,
+            //             suggest_followup_questions: useSuggestFollowupQuestions,
+            //             use_oid_security_filter: useOidSecurityFilter,
+            //             use_groups_security_filter: useGroupsSecurityFilter,
+            //             vector_fields: vectorFieldList,
+            //             use_gpt4v: useGPT4V,
+            //             gpt4v_input: gpt4vInput,
+            //             language: i18n.language,
+            //             ...(seed !== null ? { seed: seed } : {})
+            //         }
+            //     },
+            //     // AI Chat Protocol: Client must pass on any session state received from the server
+            //     session_state: answers.length ? answers[answers.length - 1][1].session_state : null
+            // };
 
-            const response = await chatApi(request, shouldStream, token);
-            if (!response.body) {
-                throw Error("No response body");
-            }
-            if (response.status > 299 || !response.ok) {
-                throw Error(`Request failed with status ${response.status}`);
-            }
+            //const response = await chatApi(request, shouldStream, token);
+            // if (!response.body) {
+            //     throw Error("No response body");
+            // }
+            // if (response.status > 299 || !response.ok) {
+            //     throw Error(`Request failed with status ${response.status}`);
+            // }
             if (shouldStream) {
-                const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
-                setAnswers([...answers, [question, parsedResponse]]);
+                start_realtime();
+                //const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
+                //setAnswers([...answers, [question, parsedResponse]]);
                 setWorkflowStateNo(workflowStateNo + 1);
             } else {
-                const parsedResponse: ChatAppResponseOrError = await response.json();
-                if (parsedResponse.error) {
-                    throw Error(parsedResponse.error);
-                }
-                setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
-                setWorkflowStateNo(workflowStateNo + 1);
+                // const parsedResponse: ChatAppResponseOrError = await response.json();
+                // if (parsedResponse.error) {
+                //     throw Error(parsedResponse.error);
+                // }
+                // setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
+                // setWorkflowStateNo(workflowStateNo + 1);
             }
             setSpeechUrls([...speechUrls, null]);
         } catch (e) {
@@ -708,6 +768,76 @@ Conclude this tutoring session by asking the student when he is available for th
             setIsLoading(false);
         }
     };
+
+    // const makeApiRequestLegacy = async (question: string) => {
+    //     lastQuestionRef.current = question;
+
+    //     error && setError(undefined);
+    //     setIsLoading(true);
+    //     setActiveCitation(undefined);
+    //     setActiveAnalysisPanelTab(undefined);
+
+    //     const token = client ? await getToken(client) : undefined;
+
+    //     try {
+    //         const messages: ResponseMessage[] = answers.flatMap(a => [
+    //             { content: a[0], role: "user" },
+    //             { content: a[1].message.content, role: "assistant" }
+    //         ]);
+
+    //         const request: ChatAppRequest = {
+    //             messages: [...messages, { content: question, role: "user" }],
+    //             context: {
+    //                 overrides: {
+    //                     prompt_template: promptTemplate.length === 0 ? undefined : promptTemplate,
+    //                     exclude_category: excludeCategory.length === 0 ? undefined : excludeCategory,
+    //                     top: retrieveCount,
+    //                     temperature: temperature,
+    //                     minimum_reranker_score: minimumRerankerScore,
+    //                     minimum_search_score: minimumSearchScore,
+    //                     retrieval_mode: retrievalMode,
+    //                     semantic_ranker: useSemanticRanker,
+    //                     semantic_captions: useSemanticCaptions,
+    //                     suggest_followup_questions: useSuggestFollowupQuestions,
+    //                     use_oid_security_filter: useOidSecurityFilter,
+    //                     use_groups_security_filter: useGroupsSecurityFilter,
+    //                     vector_fields: vectorFieldList,
+    //                     use_gpt4v: useGPT4V,
+    //                     gpt4v_input: gpt4vInput,
+    //                     language: i18n.language,
+    //                     ...(seed !== null ? { seed: seed } : {})
+    //                 }
+    //             },
+    //             // AI Chat Protocol: Client must pass on any session state received from the server
+    //             session_state: answers.length ? answers[answers.length - 1][1].session_state : null
+    //         };
+
+    //         const response = await chatApi(request, shouldStream, token);
+    //         if (!response.body) {
+    //             throw Error("No response body");
+    //         }
+    //         if (response.status > 299 || !response.ok) {
+    //             throw Error(`Request failed with status ${response.status}`);
+    //         }
+    //         if (shouldStream) {
+    //             const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
+    //             setAnswers([...answers, [question, parsedResponse]]);
+    //             setWorkflowStateNo(workflowStateNo + 1);
+    //         } else {
+    //             const parsedResponse: ChatAppResponseOrError = await response.json();
+    //             if (parsedResponse.error) {
+    //                 throw Error(parsedResponse.error);
+    //             }
+    //             setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
+    //             setWorkflowStateNo(workflowStateNo + 1);
+    //         }
+    //         setSpeechUrls([...speechUrls, null]);
+    //     } catch (e) {
+    //         setError(e);
+    //     } finally {
+    //         setIsLoading(false);
+    //     }
+    // };
 
     const clearChat = () => {
         lastQuestionRef.current = "";
@@ -730,7 +860,10 @@ Conclude this tutoring session by asking the student when he is available for th
     }, []);
 
     const onPromptTemplateChange = (_ev?: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string) => {
+        console.log("onPromptTemplateChange: newValue: " + newValue);
         setPromptTemplate(newValue || "");
+        prmpt = newValue || "";
+        console.log("onPromptTemplateChange: promptTemplate: " + promptTemplate);
     };
 
     const onTemperatureChange = (_ev?: React.SyntheticEvent<HTMLElement, Event>, newValue?: string) => {
@@ -849,32 +982,33 @@ Conclude this tutoring session by asking the student when he is available for th
             </div>
             <div className={styles.chatRoot}>
                 <div className={styles.chatContainer}>
+                    <div id="received-text-container" className={styles.chatMessageGptMinWidth}></div>
                     {!lastQuestionRef.current ? (
                         <div className={styles.chatEmptyState}>
                             <SparkleFilled fontSize={"120px"} primaryFill={"rgba(115, 118, 225, 1)"} aria-hidden="true" aria-label="Chat logo" />
                             <h1 className={styles.chatEmptyStateTitle}>{t("chatEmptyStateTitle")}</h1>
-                            <h2 className={styles.chatEmptyStateSubtitle}>Hello Nicolas! Are you ready for today's tutoring session? Let's get started!</h2>
+                            <h2 className={styles.chatEmptyStateSubtitle}>Hello Nicolas! Welcome to our Tutoring session!</h2>
                             <hr />
                             {showLanguagePicker && <LanguagePicker onLanguageChange={newLang => i18n.changeLanguage(newLang)} />}
 
                             <ExampleList onExampleClicked={onExampleClicked} useGPT4V={useGPT4V} />
-                            <div id="received-text-container"></div>
                         </div>
                     ) : (
                         <div className={styles.chatMessageStream}>
-                            {isStreaming && workflowStateNo > 0 && (
+                            {/* {isStreaming && workflowStateNo > 0 && (
                                 <div key={0}>
-                                    {/* <UserChatMessage message={streamedAnswers[0] ? streamedAnswers[0][0] : ""} /> */}
+                                    <UserChatMessage message={streamedAnswers[0] ? streamedAnswers[0][0] : ""} />
                                     <div className={styles.chatMessageGpt}>
                                         <Answer
                                             isStreaming={true}
                                             key="0"
                                             answer={
-                                                streamedAnswers[0] && typeof streamedAnswers[0][1] !== "string"
-                                                    ? streamedAnswers[0][1]
+                                                streamedAnswers[streamedAnswers.length - 1] &&
+                                                typeof streamedAnswers[streamedAnswers.length - 1][1] !== "string"
+                                                    ? streamedAnswers[streamedAnswers.length - 1][1]
                                                     : ({} as ChatAppResponse)
                                             }
-                                            index={0}
+                                            index={streamedAnswers.length - 1}
                                             speechConfig={speechConfig}
                                             isSelected={false}
                                             onCitationClicked={c => onShowCitation(c, 0)}
@@ -889,7 +1023,7 @@ Conclude this tutoring session by asking the student when he is available for th
                                         />
                                     </div>
                                 </div>
-                            )}
+                            )} */}
                             {/* {isStreaming &&
                                 streamedAnswers.map((streamedAnswer, index) => (
                                     <div key={index}>
@@ -914,15 +1048,19 @@ Conclude this tutoring session by asking the student when he is available for th
                                         </div>
                                     </div>
                                 ))} */}
-                            {!isStreaming && workflowStateNo > 0 && (
+                            {/* {!isStreaming && workflowStateNo > 0 && (
                                 <div key={0}>
-                                    {/* <UserChatMessage message={answers[0] ? answers[0][0] : ""} /> */}
+                                    <UserChatMessage message={answers[0] ? answers[0][0] : ""} />
                                     <div className={styles.chatMessageGpt}>
                                         <Answer
                                             isStreaming={false}
-                                            key={0}
-                                            answer={answers[0] && typeof answers[0][1] !== "string" ? answers[0][1] : ({} as ChatAppResponse)}
-                                            index={0}
+                                            key={answers.length - 1}
+                                            answer={
+                                                answers[answers.length - 1] && typeof answers[answers.length - 1][1] !== "string"
+                                                    ? answers[answers.length - 1][1]
+                                                    : ({} as ChatAppResponse)
+                                            }
+                                            index={answers.length - 1}
                                             speechConfig={speechConfig}
                                             isSelected={selectedAnswer === 0 && activeAnalysisPanelTab !== undefined}
                                             onCitationClicked={c => onShowCitation(c, 0)}
@@ -937,7 +1075,7 @@ Conclude this tutoring session by asking the student when he is available for th
                                         />
                                     </div>
                                 </div>
-                            )}
+                            )} */}
                             {/* {!isStreaming &&
                                 answers.map((answer, index) => (
                                     <div key={index}>

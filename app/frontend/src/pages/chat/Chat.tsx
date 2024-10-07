@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
-import { Checkbox, Panel, DefaultButton, TextField, ITextFieldProps, ICheckboxProps } from "@fluentui/react";
+import { Checkbox, Panel, DefaultButton, TextField, ITextFieldProps, ICheckboxProps, Image } from "@fluentui/react";
 import { SparkleFilled } from "@fluentui/react-icons";
 import { useId } from "@fluentui/react-hooks";
 import readNDJSONStream from "ndjson-readablestream";
@@ -422,7 +422,7 @@ Conclude this tutoring session by asking the student
                     case "input_audio_buffer.speech_started":
                         console.log("handleRealtimeMessages: 'Speech started' sequence started...");
                         //makeNewTextBlock("<< Speech Started >>");
-                        let textElements = formReceivedTextContainer.children;
+                        //let textElements = formReceivedTextContainer.children;
                         //latestInputSpeechBlock = textElements[textElements.length - 1];
                         //makeNewTextBlock();
                         audioPlayer.clear();
@@ -1065,12 +1065,12 @@ Conclude this tutoring session by asking the student
             </div>
             <div className={styles.chatRoot}>
                 <div className={styles.chatContainer}>
-                    <div id="received-text-container" className={styles.chatMessageGptMinWidth}></div>
-                    <PromptRenderer prompt={studentTurn} />
-                    <PromptRenderer prompt={mcqPrompt} />
+                    {/* <SparkleFilled fontSize={"120px"} primaryFill={"rgba(115, 118, 225, 1)"} aria-hidden="true" aria-label="Chat logo" /> */}
+
                     {!lastQuestionRef.current ? (
                         <div className={styles.chatEmptyState}>
-                            <SparkleFilled fontSize={"120px"} primaryFill={"rgba(115, 118, 225, 1)"} aria-hidden="true" aria-label="Chat logo" />
+                            {/* <SparkleFilled fontSize={"120px"} primaryFill={"rgba(115, 118, 225, 1)"} aria-hidden="true" aria-label="Chat logo" /> */}
+                            <Image src="/TutorStudent.png" alt="Tutor AI" width={150} height={150} />
                             <h1 className={styles.chatEmptyStateTitle}>{t("chatEmptyStateTitle")}</h1>
                             <h2 className={styles.chatEmptyStateSubtitle}>Hello Nicolas! Welcome to our Tutoring session!</h2>
                             <hr />
@@ -1080,6 +1080,15 @@ Conclude this tutoring session by asking the student
                         </div>
                     ) : (
                         <div className={styles.chatMessageStream}>
+                            <Image src="/TutorStudent.png" alt="Tutor AI" width={80} height={80} />
+                            <h1>Tutoring Session</h1>
+                            {/* <div id="received-text-container"></div> */}
+                            <div className={styles.chatInput}>
+                                <PromptRenderer prompt={studentTurn} type={"student"} />
+                            </div>
+                            <div className={styles.chatInput}>
+                                <PromptRenderer prompt={mcqPrompt} type={"tutor"} />
+                            </div>
                             {/* {isStreaming && workflowStateNo > 0 && (
                                 <div key={0}>
                                     <UserChatMessage message={streamedAnswers[0] ? streamedAnswers[0][0] : ""} />
@@ -1212,7 +1221,7 @@ Conclude this tutoring session by asking the student
                                 placeholder={t("defaultExamples.placeholder")}
                                 disabled={isLoading}
                                 onSend={question => makeApiRequest(question)}
-                                showSpeechInput={showSpeechInput}
+                                showSpeechInput={false}
                                 initQuestion={selectedMCQAnswer ? "My answer is: " + selectedMCQAnswer : ""}
                             />
                         </div>

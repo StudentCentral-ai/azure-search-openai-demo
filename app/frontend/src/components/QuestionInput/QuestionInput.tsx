@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { Stack, TextField } from "@fluentui/react";
 import { Button, Tooltip } from "@fluentui/react-components";
-import { Send28Filled } from "@fluentui/react-icons";
+import { Mic28Filled, Send28Filled, MicOff24Filled } from "@fluentui/react-icons";
 import { useTranslation } from "react-i18next";
 
 import styles from "./QuestionInput.module.css";
@@ -95,12 +95,16 @@ export const QuestionInput = ({ onSend, disabled, placeholder, clearOnSend, init
                 </Tooltip>
             </div>
             {showSpeechInput && <SpeechInput updateQuestion={setQuestion} />}
-            <button id="start-recording" type="button">
-                Record
-            </button>
-            <button id="stop-recording" type="button" disabled={true}>
-                Stop
-            </button>
+            <div className={styles.questionInputButtonsContainer}>
+                <Tooltip content={"Open mic"} relationship="label">
+                    <Button size="large" id="start-recording" icon={<Mic28Filled primaryFill="rgba(50, 0, 50, 0.7)" />} />
+                </Tooltip>
+            </div>
+            <div className={styles.questionInputButtonsContainer}>
+                <Tooltip content={"Close mic"} relationship="label">
+                    <Button size="large" id="stop-recording" icon={<MicOff24Filled primaryFill="rgba(250, 0, 0, 0.7)" />} disabled={true} />
+                </Tooltip>
+            </div>
         </Stack>
     );
 };

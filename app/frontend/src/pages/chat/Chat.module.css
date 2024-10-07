@@ -26,6 +26,7 @@
     align-items: center;
     max-height: 64rem;
     padding-top: 1rem;
+    width: 100%;
 }
 
 .chatEmptyStateTitle {
@@ -46,8 +47,8 @@
     max-width: 64.25rem;
     width: 100%;
     overflow-y: auto;
-    padding-left: 1rem;
-    padding-right: 1rem;
+    /* padding-left: 1rem;
+    padding-right: 1rem; */
     display: flex;
     flex-direction: column;
 }
@@ -70,7 +71,7 @@
     padding: 1rem;
     width: 100%;
     max-width: 64.25rem;
-    background: #f2f2f2;
+    background: #f5f5d0;
 }
 
 .chatAnalysisPanel {

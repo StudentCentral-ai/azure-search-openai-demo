@@ -148,7 +148,7 @@ const Chat = () => {
     const lock = new Lock();
 
     const ENDPOINT = "https://stce-aiexp-core-dev-aoai.openai.azure.com/";
-    const API_KEY = "8e0d555581f3452f850b9f93b2ea0148";
+    const API_KEY = "OPENAI_API_KEY_SECRET";
     const DEPLOYMENT = "gpt-4o-realtime-preview-global";
     const TEMPERATURE = 0.8;
     const VOICE = "echo";

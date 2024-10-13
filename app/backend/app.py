@@ -1,12 +1,12 @@
-import dataclasses
-import io
-import json
-import logging
+import dataclasses # For handling data structures
+import io 
+import json 
+import logging # Logging library for capturing logs
 import mimetypes
 import os
-import time
+import time # Time-related functions like time tracking
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, Union, cast
+from typing import Any, AsyncGenerator, Dict, Union, cast # Type annotations for async operations and data typing
 
 from azure.cognitiveservices.speech import (
     ResultReason,
